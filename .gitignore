@@ -1,0 +1,7 @@
+# Ignorera vissa filer
+
+# Objektfiler och arkivfiler
+*.[oa]
+# emacs-backup
+*~
+# Färdiga binärer
