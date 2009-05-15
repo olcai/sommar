@@ -8,11 +8,31 @@
 #include "include/lcd_lib.h"
 #include <avr/pgmspace.h>
 #include <util/delay.h>
+#include <string.h>
+#include <ctype.h>
+#include "suart.h"
 
 #include "config.h"
 #include "uart.h"
 #include "system.h"
 
+// Basstation eller inte?
+#define BASE 0
+#define NODE 1
+
+// Väntetid innan svar skickas i antal timer2 compare-matchningar
+#define ANSWER_SEND_TIMER2_WAITS 16
+
+
+uint8_t operation_mode;
+char answer[24] = {'0', '4'};
+uint8_t sendreadyflag = 0;
+
+void check_command(char* buffer);
+void execute_command(char* buffer);
+void send_radio_command(char* buffer);
+
+#if 0
 // Defines for Software UART
 #define STATE_IDLE 0
 #define STATE_TRANSMIT 1
@@ -26,7 +46,7 @@
 #define SUART_RX_DDR  DDRD
 #define SUART_TX_DDR  DDRD
 #define SUART_RX_PIN  2
-#define SUART_TX_PIN  3
+#define SUART_TX_PIN  4
 
 /* Skala ned klockan med lämplig multipel
    Formel: N = CPUFreq / (Baudrate * multipel)
@@ -193,9 +213,8 @@ word_t suart_putc(const word_t c) {
   TIMSK |= _BV(OCIE0);
   return !0;
 }
-
-void setupled()
-{
+#endif 
+void setupled(void) {
   // Setup button input
 //  DDRC&=~_BV(0);//set PORTD pin0 to zero as input
 //  PORTC|=_BV(0);//Enable pull up
@@ -205,14 +224,81 @@ void setupled()
 //  DDRB|=_BV(1);//set PORTD pin1 to one as output
 }
 
-int main()
-{
-    char buffer[32];
-int i;
+ISR(TIMER2_COMP_vect) {
+  static char counter = 0;
+  int i = 0;
+  if (counter++ == ANSWER_SEND_TIMER2_WAITS) { 
+    if (!sendreadyflag) {
+      panic("No answer!");
+    }
+    do {
+      uart_putc(answer[i]);
+    } while (answer[++i] != PROTOCOL_STOPCHAR);
+    sendreadyflag = 0;
+    counter = 0;
+    TIMSK &= ~_BV(OCIE2);
+  }
+}
+
+void check_command(char* buffer) {
+  if (buffer[0] == '0' && (buffer[1] == '4' || buffer[1] == '0')) {
+      execute_command(buffer + 2);
+  }
+  if (operation_mode == BASE) {
+    send_radio_command(buffer);
+  }
+}
+
+void execute_command(char* buffer) {
+  PORTC--;
+  if (!strncmp("PING", buffer, 4) || !strncmp("TIME", buffer, 4) || !strncmp("INT", buffer, 3)) {
+    PORTC--;
+    answer[2] = 'o';
+    answer[3] = 'k';
+    answer[4] = PROTOCOL_STOPCHAR;
+    sendreadyflag = 1;
+  }
+  if (!strncmp("VALUE", buffer, 5)) {
+    //Answer NNHHMMSSvalue
+  }
+}
+
+void send_radio_command(char* buffer) {
+
+}
+
+void timer2_init(void) {
+  //ClearTimerOnCompare, Systemclock/1024 (3600Hz)
+  TCCR2 = _BV(WGM21) | _BV(CS22) | _BV(CS21) | _BV(CS20);
+  TCNT2 = 0;
+  OCR2 = 180;
+}
+
+int main(void) {
+  operation_mode = BASE;
+  char buffer[32];
+  int i;
   const char str[] = "foo";
   const char *p = str;
   uart_init();
+  suart_init();
+
+  //Timer2 används för att hålla våran radio-timeslot.
+  timer2_init();
+ 
   sei();
+
+  while(*p)
+  {
+#if 1
+      uart_putc(*p);
+      p++;
+#else
+      suart_putc(*p);
+      p++;
+#endif
+  }
+
   /* set portD as output and all leds off */
   DDRC = 0xFF;
   PORTC = 0xff;
@@ -225,60 +311,28 @@ int i;
   LCDstring(hello, 13);
   LCDGotoXY(0,1);
 
-  while(*p)
-  {
-        uart_putc(*p);
-      p++;
-  }
   while(1)
   {
-    if(uart.flags.stopchar_received)
-    {
-        uart.flags.stopchar_received = 0;
-        uint8_t i = 0;
-        while((buffer[i++] = uart_getc()) != PROTOCOL_STOPCHAR);
-        LCDstring(buffer, i-1);
-        LCDGotoXY(0,1);
+#if 1
+    if(uart.flags.stopchar_received) {
+      uart.flags.stopchar_received = 0;
+      TCNT2 = 0;
+      TIMSK |= _BV(OCIE2);
+      uint8_t i = 0;
+      while ((buffer[i] = uart_getc()) != PROTOCOL_STOPCHAR) {
+        buffer[i] = toupper(buffer[i]);
+        i++;
+      }
+      check_command(buffer);
     }
-  }
-
-#if 0
-  initSoftwareUart();
-
-  while(*p)
-      if(suart_putc(*p))
-      p++;
-
-  //suart_putc('a');
-
-  //  PORTC = 0xff;
-  //  setupled();
-  
-
-  while (1)
-    {
-      //      LCDsendChar(rx_data);
-            _delay_ms(100);
-            PORTC = GICR;
-    if(flag_new_data)
-    {
-      //LCDGotoXY(0,1);
-      LCDsendChar(rx_data);
-      flag_new_data = 0;
-      //      LCDsendChar(rx_data);
-      /*
-      for(i=0;i<8;i++)
-        {
-          if(rx_data & _BV(i))
-            LCDsendChar('1');
-          else
-            LCDsendChar('0');
-        }
-      */ 
-      //      state = STATE_IDLE;
-    }
-    //  GICR |= _BV(INT0); 
-  }
 #endif
+#if 0
+    if(suart.flags.stopchar_received) {
+      suart.flags.stopchar_received = 0;
+      while ((buffer[i++] = suart_getc()))
+        ;
+    }
+#endif
+  }
 }
-  /* return 0; */
+

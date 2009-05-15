@@ -13,15 +13,15 @@ typedef struct
 {
     uint8_t data[UART_FIFO_SIZE];
     uint8_t write_offset; /* offset to byte to write */
-    uint8_t write_bit_offset;
     uint8_t read_offset;  /* offset to byte to read  */
-    uint8_t read_bit_offset;
 } suart_fifo_t;
 
 typedef struct
 {
     suart_fifo_t rx;
     suart_fifo_t tx;
+    uint8_t state;
+    uint8_t bit_counter; /* bit counter used in timer */
     struct
     {
         uint8_t stopchar_received: 1;

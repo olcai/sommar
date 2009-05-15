@@ -5,11 +5,12 @@
 #include "system.h"
 
 volatile uart_t uart;
-
+#include <string.h>
 void uart_init()
 {
     UCSRC = _BV(URSEL) | _BV(UCSZ1) | _BV(UCSZ0);
 
+    memset(&uart, '\0', sizeof(uart_t));
     /* baudrate set to 1200 */
     UBRRH = 0x0;
     UBRRL = 0xbf;
@@ -58,8 +59,6 @@ ISR(USART_UDRE_vect)
     /* put the byte into Uart Data Register */
     UDR = uart.tx.data[uart.tx.read_pos];
     uart.tx.read_pos = (uart.tx.read_pos + 1) % UART_FIFO_SIZE;
-  
-//  PORTC--;
 }
 
 ISR(USART_RXC_vect)
@@ -68,12 +67,11 @@ ISR(USART_RXC_vect)
     {
         panic("uart: rx full");
     }
-
     uart.rx.data[uart.rx.write_pos] = UDR;
 
     if(uart.rx.data[uart.rx.write_pos] == PROTOCOL_STOPCHAR)
         uart.flags.stopchar_received = 1;
-    
+
     uart.rx.write_pos = (uart.rx.write_pos + 1) % UART_FIFO_SIZE;
 }
 
