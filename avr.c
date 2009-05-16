@@ -24,13 +24,15 @@
 #define ANSWER_SEND_TIMER2_WAITS 16
 
 
-uint8_t operation_mode;
-char answer[24] = {'0', '4'};
-uint8_t sendreadyflag = 0;
+volatile uint8_t operation_mode;
+volatile char answer[24] = {'0', '4'};
+volatile uint8_t sendreadyflag = 0;
 
 void check_command(char* buffer);
 void execute_command(char* buffer);
 void send_radio_command(char* buffer);
+void set_time(char* buffer);
+void set_measure_time(char* buffer);
 
 #if 0
 // Defines for Software UART
@@ -231,9 +233,16 @@ ISR(TIMER2_COMP_vect) {
     if (!sendreadyflag) {
       panic("No answer!");
     }
-    do {
-      uart_putc(answer[i]);
-    } while (answer[++i] != PROTOCOL_STOPCHAR);
+    if (operation_mode == BASE) {
+      do {
+        uart_putc(answer[i]);
+      } while (answer[++i] != PROTOCOL_STOPCHAR);
+    }
+    else {
+      do {
+        suart_putc(answer[i]);
+      } while (answer[++i] != PROTOCOL_STOPCHAR);
+    }
     sendreadyflag = 0;
     counter = 0;
     TIMSK &= ~_BV(OCIE2);
@@ -251,12 +260,25 @@ void check_command(char* buffer) {
 
 void execute_command(char* buffer) {
   PORTC--;
-  if (!strncmp("PING", buffer, 4) || !strncmp("TIME", buffer, 4) || !strncmp("INT", buffer, 3)) {
-    PORTC--;
+  if (!strncmp("PING", buffer, 4)) {
     answer[2] = 'o';
     answer[3] = 'k';
     answer[4] = PROTOCOL_STOPCHAR;
     sendreadyflag = 1;
+  }
+  if (!strncmp("TIME", buffer, 4)) {
+    answer[2] = 'o';
+    answer[3] = 'k';
+    answer[4] = PROTOCOL_STOPCHAR;
+    sendreadyflag = 1;
+    set_time(buffer + 4);
+  }
+  if (!strncmp("INT", buffer, 3)) {
+    answer[2] = 'o';
+    answer[3] = 'k';
+    answer[4] = PROTOCOL_STOPCHAR;
+    sendreadyflag = 1;
+    set_measure_time(buffer + 3);
   }
   if (!strncmp("VALUE", buffer, 5)) {
     //Answer NNHHMMSSvalue
@@ -265,6 +287,14 @@ void execute_command(char* buffer) {
 
 void send_radio_command(char* buffer) {
 
+}
+
+void set_time(char* buffer) {
+//TODO lägg denna i separat fil och implementera
+}
+
+void set_measure_time(char* buffer) {
+//TODO lägg denna i separat fil och implementera
 }
 
 void timer2_init(void) {
@@ -313,7 +343,6 @@ int main(void) {
 
   while(1)
   {
-#if 1
     if(uart.flags.stopchar_received) {
       uart.flags.stopchar_received = 0;
       TCNT2 = 0;
@@ -325,14 +354,25 @@ int main(void) {
       }
       check_command(buffer);
     }
-#endif
-#if 0
     if(suart.flags.stopchar_received) {
-      suart.flags.stopchar_received = 0;
-      while ((buffer[i++] = suart_getc()))
-        ;
+      if (operation_mode == NODE) {
+        TCNT2 = 0;
+        TIMSK |= _BV(OCIE2);
+        uint8_t i = 0;
+        while ((buffer[i] = suart_getc()) != PROTOCOL_STOPCHAR) {
+          buffer[i] = toupper(buffer[i]);
+          i++;
+        }
+        check_command(buffer);
+      }
+      else {
+        suart.flags.stopchar_received = 0;
+        while ((i = suart_getc()) != PROTOCOL_STOPCHAR) {
+          uart_putc(i);
+        }
+      }
     }
-#endif
+    //TODO här skulle man kunna sleepa tills man får interrupt som säger att vi har data
   }
 }
 
