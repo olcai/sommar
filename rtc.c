@@ -6,17 +6,19 @@
 char real_time[6] = {'0', '0', '0', '0', '0', '0'};
 
 ISR(TIMER1_COMPA_vect) {
-  if (real_time[5]++ == '9') {
+  TCNT1H = 0;
+  TCNT1L = 0;
+  if (real_time[5]++ >= '9') {
     real_time[5] = '0';
-    if (real_time[4]++ == '5') {
+    if (real_time[4]++ >= '5') {
       real_time[4] = '0';
-      if (real_time[3]++ == '9') {
+      if (real_time[3]++ >= '9') {
         real_time[3] = '0';
-        if (real_time[2]++ == '5') {
+        if (real_time[2]++ >= '5') {
           real_time[2] = '0';
-          if (real_time[1]++ == '9') {
+          if (real_time[1]++ >= '9') {
             real_time[1] = '0';
-            if (real_time[0]++ == '9') {
+            if (real_time[0]++ >= '9') {
               real_time[0] = '0';
             }
           }
@@ -24,14 +26,22 @@ ISR(TIMER1_COMPA_vect) {
       }
     }
   }
-  TCNT1H = 0;
-  TCNT1L = 0;
 }
 
-void set_time(char* buffer) {
-  int i;
-  for (i=0;i<6;i++)
-    real_time[i] = buffer[i];
+signed char set_time(char* buffer) {
+  signed char i;
+  i = real_time[0] >= '0' && real_time[0] <= '9'
+   && real_time[1] >= '0' && real_time[1] <= '9'
+   && real_time[2] >= '0' && real_time[2] <= '9'
+   && real_time[3] >= '0' && real_time[3] <= '9'
+   && real_time[4] >= '0' && real_time[4] <= '9'
+   && real_time[5] >= '0' && real_time[5] <= '9';
+
+  if (i)
+    for (i=0;i<6;i++)
+      real_time[i] = buffer[i];
+
+  return i;
 }
 
 void init_rtc(void) {
