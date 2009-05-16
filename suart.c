@@ -13,6 +13,15 @@ volatile suart_t suart;
 #define STATE_RECEIVE_STOP_BIT 5
 #define STATE_DATA_PENDING 4
 
+/* 
+ * The lenght of each bitlength
+ * multipel == timer prescaler
+ * Skala ned klockan med lämplig multipel
+   Formel: N = CPUFreq / (Baudrate * multipel)
+   N är värdet som ska laddas in i Compare-registret
+*/
+#define SUART_BIT_TIME_LENGTH 48 /* (uint8_t) (F_CPU / (1200 * 64)) */
+
 void suart_init()
 {
   /* configure RX pin as input */
@@ -32,7 +41,7 @@ void suart_init()
   TCCR0 = _BV(CS01) | _BV(CS00);
   /* clear match interrupt flag */
   TIFR |= _BV(OCF0); 
-  OCR0 = 48;
+  OCR0 = SUART_BIT_TIME_LENGTH;
   /* activate timer match interrupt */
   TIMSK |= _BV(OCIE0);
 }
@@ -67,6 +76,24 @@ uint8_t suart_getc(void)
 }
 
 /* Interrupt Service Routines */
+/* RX-interrupt */
+ISR(INT0_vect)
+{
+  suart.state = STATE_RECEIVE;
+  suart.bit_counter = 0;
+  
+  /* by clearing the byte here we do not need to sample the zeros */
+  suart.rx.data[suart.rx.write_offset] = 0;
+
+  /* no more rx-interrupt, we read the bits with timer0 */
+  GICR &= ~_BV(INT0);
+
+  /* restart the timer and wait 1.5 bit length so that we sample the bits
+   * in the middle */
+  TCNT0 = 0;
+  OCR0 = SUART_BIT_TIME_LENGTH * 1.5;
+}
+
 ISR(TIMER0_COMP_vect)
 {
   switch(suart.state)
@@ -89,7 +116,29 @@ ISR(TIMER0_COMP_vect)
       suart.bit_counter++;
       suart.tx.data[suart.tx.read_offset] >>= 1;
       break;
-#if 0
+    
+    case STATE_RECEIVE:
+      /* now we are in the middle of the bit so continue to sample here */
+      OCR0 = SUART_BIT_TIME_LENGTH;
+        
+      /* the buffer is by default all zero so we only need to 'save'
+         the zeros */
+      if(bit_is_set(SUART_RX_PORT, SUART_RX_PIN))
+        suart.rx.data[suart.rx.write_offset] |= _BV(suart.bit_counter);
+
+      if(++suart.bit_counter > 7)
+        suart.state = STATE_RECEIVE_STOP_BIT;
+      break;
+
+    case STATE_TRANSMIT_STOP_BIT:
+      suart.state = STATE_IDLE;
+      suart.tx.read_offset = (suart.tx.read_offset + 1) % UART_FIFO_SIZE;
+
+      /* reset rx-interrupt flag and activate it */
+      GIFR = _BV(INTF0);
+      GICR |= _BV(INT0);
+      break;
+
     case STATE_RECEIVE_STOP_BIT:
       /* check for good stop bit (ie 1) */
       if(bit_is_set(SUART_RX_PORT, SUART_RX_PIN))
@@ -106,16 +155,7 @@ ISR(TIMER0_COMP_vect)
       GICR |= _BV(INT0);
       suart.state = STATE_IDLE;
       /* no break as now we will check if there is new data to send */
-#endif
-    case STATE_TRANSMIT_STOP_BIT:
-      suart.state = STATE_IDLE;
-      suart.tx.read_offset = (suart.tx.read_offset + 1) % UART_FIFO_SIZE;
-
-      /* reset rx-interrupt flag and activate it */
-      GIFR = _BV(INTF0);
-      GICR |= _BV(INT0);
-      break;
-
+    
     case STATE_IDLE:
       /* is there any data to send? */
       if(suart.tx.write_offset != suart.tx.read_offset)
