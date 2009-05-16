@@ -290,6 +290,7 @@ void execute_command(char* buffer) {
     answer[6] = real_time[4];
     answer[7] = real_time[5];
     answer[8] = PROTOCOL_STOPCHAR;
+    sendreadyflag = 1;
   }
 }
 
@@ -313,7 +314,7 @@ int main(void) {
   DDRC = 0xFF;
   PORTC = 0xff;
 
-  operation_mode = BASE;
+  operation_mode = NODE;
   char buffer[32];
   int i;
   const char str[] = "foo";
