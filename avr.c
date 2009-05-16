@@ -302,6 +302,10 @@ void timer2_init(void) {
 }
 
 int main(void) {
+   /* set portD as output and all leds off */
+  DDRC = 0xFF;
+  PORTC = 0xff;
+
   operation_mode = BASE;
   char buffer[32];
   int i;
@@ -327,10 +331,7 @@ int main(void) {
 #endif
   }
 
-  /* set portD as output and all leds off */
-  DDRC = 0xFF;
-  PORTC = 0xff;
-  /* Setup LCD and display greeting */
+ /* Setup LCD and display greeting */
   LCDinit(); 
   LCDclr();
   LCDGotoXY(0,0);
@@ -354,6 +355,7 @@ int main(void) {
     }
     if(suart.flags.stopchar_received) {
       if (operation_mode == NODE) {
+        uart.flags.stopchar_received = 0;
         TCNT2 = 0;
         TIMSK |= _BV(OCIE2);
         uint8_t i = 0;
