@@ -3,7 +3,7 @@
 
 extern char real_time[6];
 
-void set_time(char* buffer);
+signed char set_time(char* buffer);
 void init_rtc(void);
 
 #endif
