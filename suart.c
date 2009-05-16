@@ -92,6 +92,7 @@ ISR(INT0_vect)
    * in the middle */
   TCNT0 = 0;
   OCR0 = SUART_BIT_TIME_LENGTH * 1.5;
+  TIFR |= _BV(OCF0);
 }
 
 ISR(TIMER0_COMP_vect)
@@ -122,7 +123,7 @@ ISR(TIMER0_COMP_vect)
       OCR0 = SUART_BIT_TIME_LENGTH;
         
       /* the buffer is by default all zero so we only need to 'save'
-         the zeros */
+         the ones */
       if(bit_is_set(SUART_RX_PORT, SUART_RX_PIN))
         suart.rx.data[suart.rx.write_offset] |= _BV(suart.bit_counter);
 
@@ -143,9 +144,13 @@ ISR(TIMER0_COMP_vect)
       /* check for good stop bit (ie 1) */
       if(bit_is_set(SUART_RX_PORT, SUART_RX_PIN))
       {
-        if(suart.tx.data[suart.tx.read_offset] == PROTOCOL_STOPCHAR)
+        if(suart.rx.data[suart.rx.write_offset] == PROTOCOL_STOPCHAR)
           suart.flags.stopchar_received = 1;
-        suart.tx.read_offset = (suart.tx.read_offset + 1) % UART_FIFO_SIZE;
+        suart.rx.write_offset = (suart.rx.write_offset + 1) % UART_FIFO_SIZE;
+        
+        /* buffer can not be empty, we have an overrun */
+        if(suart.rx.write_offset == suart.rx.read_offset)
+          panic("suart: rx overflow");
       }
       else
         panic("suart: rx bad stop");
@@ -154,7 +159,9 @@ ISR(TIMER0_COMP_vect)
       GIFR = _BV(INTF0);
       GICR |= _BV(INT0);
       suart.state = STATE_IDLE;
+      //TIMSK &= ~_BV(1);
       /* no break as now we will check if there is new data to send */
+      break;
     
     case STATE_IDLE:
       /* is there any data to send? */
