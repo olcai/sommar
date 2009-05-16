@@ -29,7 +29,9 @@ ISR(TIMER1_COMPA_vect) {
 }
 
 void set_time(char* buffer) {
-
+  int i;
+  for (i=0;i<6;i++)
+    real_time[i] = buffer[i];
 }
 
 void init_rtc(void) {
