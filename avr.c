@@ -309,6 +309,7 @@ int main(void) {
   const char *p = str;
   uart_init();
   suart_init();
+  init_rtc();
 
   //Timer2 används för att hålla våran radio-timeslot.
   timer2_init();
