@@ -5,16 +5,17 @@
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
 #include <avr/io.h>
-#include "include/lcd_lib.h"
 #include <avr/pgmspace.h>
 #include <util/delay.h>
 #include <string.h>
 #include <ctype.h>
-#include "suart.h"
 
+#include "lcd_lib.h"
+#include "system.h"
 #include "config.h"
 #include "uart.h"
-#include "system.h"
+#include "suart.h"
+#include "rtc.h"
 
 // Basstation eller inte?
 #define BASE 0
@@ -289,12 +290,8 @@ void send_radio_command(char* buffer) {
 
 }
 
-void set_time(char* buffer) {
-//TODO lägg denna i separat fil och implementera
-}
-
 void set_measure_time(char* buffer) {
-//TODO lägg denna i separat fil och implementera
+  //TODO fix and move to separate file
 }
 
 void timer2_init(void) {
@@ -305,6 +302,10 @@ void timer2_init(void) {
 }
 
 int main(void) {
+   /* set portD as output and all leds off */
+  DDRC = 0xFF;
+  PORTC = 0xff;
+
   operation_mode = BASE;
   char buffer[32];
   int i;
@@ -312,6 +313,7 @@ int main(void) {
   const char *p = str;
   uart_init();
   suart_init();
+  init_rtc();
 
   //Timer2 används för att hålla våran radio-timeslot.
   timer2_init();
@@ -329,10 +331,7 @@ int main(void) {
 #endif
   }
 
-  /* set portD as output and all leds off */
-  DDRC = 0xFF;
-  PORTC = 0xff;
-  /* Setup LCD and display greeting */
+ /* Setup LCD and display greeting */
   LCDinit(); 
   LCDclr();
   LCDGotoXY(0,0);
@@ -356,6 +355,7 @@ int main(void) {
     }
     if(suart.flags.stopchar_received) {
       if (operation_mode == NODE) {
+        uart.flags.stopchar_received = 0;
         TCNT2 = 0;
         TIMSK |= _BV(OCIE2);
         uint8_t i = 0;
