@@ -283,12 +283,7 @@ void execute_command(char* buffer) {
   }
   if (!strncmp("VALUE", buffer, 5)) {
     //Answer NNHHMMSSvalue
-    answer[2] = real_time[0];
-    answer[3] = real_time[1];
-    answer[4] = real_time[2];
-    answer[5] = real_time[3];
-    answer[6] = real_time[4];
-    answer[7] = real_time[5];
+    rtc_gettime(answer+2);
     answer[8] = PROTOCOL_STOPCHAR;
     sendreadyflag = 1;
   }
@@ -381,6 +376,7 @@ int main(void) {
       }
     }
     //TODO här skulle man kunna sleepa tills man får interrupt som säger att vi har data
+
   }
 }
 

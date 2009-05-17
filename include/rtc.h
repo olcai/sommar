@@ -1,8 +1,9 @@
 #ifndef __RTC_H__
 #define __RTC_H__
 
-extern char real_time[6];
+//extern char real_time[6];
 
+void rtc_gettime(char* buffer);
 void set_time(char* buffer);
 void init_rtc(void);
 
