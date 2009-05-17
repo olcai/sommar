@@ -4,7 +4,6 @@
 #include "config.h"
 #include "system.h"
 
-
 typedef struct
 {
   char data[6]; /* the time in ASCII */
@@ -58,10 +57,20 @@ ISR(TIMER1_COMPA_vect)
   }
 }
 
-void set_time(char* buffer) {
-  int i;
-  for (i=0;i<6;i++)
-    rtc.data[i] = buffer[i];
+signed char set_time(char* buffer) {
+  signed char i;
+  i = rtc.data[0] >= '0' && rtc.data[0] <= '9'
+   && rtc.data[1] >= '0' && rtc.data[1] <= '9'
+   && rtc.data[2] >= '0' && rtc.data[2] <= '9'
+   && rtc.data[3] >= '0' && rtc.data[3] <= '9'
+   && rtc.data[4] >= '0' && rtc.data[4] <= '9'
+   && rtc.data[5] >= '0' && rtc.data[5] <= '9';
+
+  if (i)
+    for (i=0;i<6;i++)
+      rtc.data[i] = buffer[i];
+
+  return i;
 }
 
 void init_rtc(void) {
