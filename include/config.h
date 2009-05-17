@@ -14,4 +14,7 @@
 #define SUART_TX_DDR  DDRD
 #define SUART_TX_PIN  4
 
+//Gruppnummer (1-9)
+#define GROUP_NUMBER 4
+
 #endif

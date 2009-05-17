@@ -1,7 +1,5 @@
 /* AVR system */
 
-#define F_CPU 3686400
-
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
 #include <avr/io.h>
@@ -22,17 +20,17 @@
 #define NODE 1
 
 // Väntetid innan svar skickas i antal timer2 compare-matchningar
-#define ANSWER_SEND_TIMER2_WAITS 16
+#define ANSWER_SEND_TIMER2_WAITS (GROUP_NUMBER * 4)
 
 
 volatile uint8_t operation_mode;
-volatile char answer[24] = {'0', '4'};
+volatile char answer[24] = {'0', '0' + GROUP_NUMBER};
 volatile uint8_t command_parsed = 0;
 
 void check_command(char* buffer);
 void execute_command(char* buffer);
 void send_radio_command(char* buffer);
-void set_measure_time(char* buffer);
+signed char set_measure_time(char* buffer);
 
 void setupled(void) {
   // Setup button input
@@ -47,20 +45,23 @@ void setupled(void) {
 ISR(TIMER2_COMP_vect) {
   static char counter = 0;
   int i = 0;
-  if (counter++ == ANSWER_SEND_TIMER2_WAITS) {
-    if (!command_parsed) {
-      panic("No answer");
-    }
-    if (operation_mode == BASE) {
+  if (operation_mode == BASE) {
+    if (command_parsed) {
       do {
         uart_putc(answer[i]);
       } while (answer[++i] != PROTOCOL_STOPCHAR);
+      command_parsed = 0;
+      counter = 0;
+      TIMSK &= ~_BV(OCIE2);
     }
-    else {
-      do {
-        suart_putc(answer[i]);
-      } while (answer[++i] != PROTOCOL_STOPCHAR);
+  }
+  else if (counter++ == ANSWER_SEND_TIMER2_WAITS) {
+    if (!command_parsed) {
+      panic("No answer");
     }
+    do {
+      suart_putc(answer[i]);
+    } while (answer[++i] != PROTOCOL_STOPCHAR);
     command_parsed = 0;
     counter = 0;
     TIMSK &= ~_BV(OCIE2);
@@ -74,8 +75,8 @@ void cmd_ok(void) {
 }
 
 void check_command(char* buffer) {
-  if (buffer[0] == '0' && (buffer[1] == '4' || buffer[1] == '0')) {
-      execute_command(buffer + 2);
+  if (buffer[0] == '0' && (buffer[1] == '0' + GROUP_NUMBER || buffer[1] == '0')) {
+    execute_command(buffer + 2);
   }
   else {
     TIMSK &= ~_BV(OCIE2);
@@ -97,8 +98,7 @@ void execute_command(char* buffer) {
   }
   else if (!strncmp("INT", buffer, 3)) {
     cmd_ok();
-    //if (set_measure_time(buffer + 3))
-    set_measure_time(buffer + 3);
+    if (set_measure_time(buffer + 3))
       command_parsed = 1;
   }
   else if (!strncmp("VALUE", buffer, 5)) {
@@ -113,17 +113,22 @@ void execute_command(char* buffer) {
 }
 
 void send_radio_command(char* buffer) {
-
+  unsigned char i = 0;
+  do {
+    suart_putc(buffer[i]);
+  } while (buffer[i++] != PROTOCOL_STOPCHAR);
 }
 
-void set_measure_time(char* buffer) {
+signed char set_measure_time(char* buffer) {
   //TODO fix and move to separate file
+  return 1;
 }
 
 void timer2_init(void) {
   //ClearTimerOnCompare, Systemclock/1024 (3600Hz)
   TCCR2 = _BV(WGM21) | _BV(CS22) | _BV(CS21) | _BV(CS20);
   TCNT2 = 0;
+  //Interrupt var 50:e ms
   OCR2 = 180;
 }
 
@@ -132,9 +137,8 @@ int main(void) {
   DDRC = 0xFF;
   PORTC = 0xff;
 
-  operation_mode = NODE;
+  operation_mode = BASE;
   char buffer[32];
-  int i;
   const char str[] = "foo";
   const char *p = str;
   uart_init();
@@ -146,6 +150,7 @@ int main(void) {
  
   sei();
 
+#if 0
   while(*p)
   {
 #if 1
@@ -156,13 +161,14 @@ int main(void) {
       p++;
 #endif
   }
+#endif
 
  /* Setup LCD and display greeting */
   LCDinit(); 
   LCDclr();
   LCDGotoXY(0,0);
   //LCDcursorOFF(); 
-  char hello[] = "System online";
+  unsigned char hello[] = "System online";
   LCDstring(hello, 13);
   LCDGotoXY(0,1);
 
@@ -193,8 +199,9 @@ int main(void) {
       }
       else {
         suart.flags.stopchar_received = 0;
-        while ((i = suart_getc()) != PROTOCOL_STOPCHAR) {
-          uart_putc(i);
+        char c;
+        while ((c = suart_getc()) != PROTOCOL_STOPCHAR) {
+          uart_putc(c);
         }
       }
     }
