@@ -1,10 +1,10 @@
 #ifndef __RTC_H__
 #define __RTC_H__
 
-//extern char real_time[6];
+#include "bool.h"
 
 void rtc_gettime(char* buffer);
-signed char set_time(char* buffer);
-void init_rtc(void);
+bool_t rtc_settime(char* buffer);
+void rtc_init(void);
 
 #endif

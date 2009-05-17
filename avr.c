@@ -92,7 +92,7 @@ void execute_command(char* buffer) {
   }
   else if (!strncmp("TIME", buffer, 4)) {
     cmd_ok();
-    if(set_time(buffer + 4))
+    if(rtc_settime(buffer + 4))
       command_parsed = 1;
   }
   else if (!strncmp("INT", buffer, 3)) {
@@ -103,7 +103,7 @@ void execute_command(char* buffer) {
   }
   else if (!strncmp("VALUE", buffer, 5)) {
     //Answer NNHHMMSSvalue
-    rtc_gettime(answer+2);
+    rtc_gettime((char*)answer+2);
     answer[8] = PROTOCOL_STOPCHAR;
     command_parsed = 1;
   }
@@ -139,7 +139,7 @@ int main(void) {
   const char *p = str;
   uart_init();
   suart_init();
-  init_rtc();
+  rtc_init();
 
   //Timer2 används för att hålla våran radio-timeslot.
   timer2_init();
