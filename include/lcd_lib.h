@@ -34,10 +34,10 @@
 #define LCD_D5	5	//define MCU pin connected to LCD D4
 #define LCD_D6	6	//define MCU pin connected to LCD D5
 #define LCD_D7	7	//define MCU pin connected to LCD D6
-#define LDP PORTA	//define MCU port connected to LCD data pins
-#define LCP PORTA	//define MCU port connected to LCD control pins
-#define LDDR DDRA	//define MCU direction register for port connected to LCD data pins
-#define LCDR DDRA	//define MCU direction register for port connected to LCD control pins
+#define LDP PORTB	//define MCU port connected to LCD data pins
+#define LCP PORTB	//define MCU port connected to LCD control pins
+#define LDDR DDRB	//define MCU direction register for port connected to LCD data pins
+#define LCDR DDRB	//define MCU direction register for port connected to LCD control pins
 
 #define LCD_CLR             0	//DB0: clear display
 #define LCD_HOME            1	//DB1: return to home position

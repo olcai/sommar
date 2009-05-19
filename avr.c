@@ -14,6 +14,7 @@
 #include "uart.h"
 #include "suart.h"
 #include "rtc.h"
+#include "adc.h"
 
 // Basstation eller inte?
 #define BASE 0
@@ -144,6 +145,7 @@ int main(void) {
   uart_init();
   suart_init();
   rtc_init();
+  adc_init();
 
   //Timer2 används för att hålla våran radio-timeslot.
   timer2_init();
@@ -172,6 +174,7 @@ int main(void) {
   LCDstring(hello, 13);
   LCDGotoXY(0,1);
 
+    adc_dosample();
   while(1)
   {
     if(uart.flags.stopchar_received) {
