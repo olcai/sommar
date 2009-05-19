@@ -49,7 +49,7 @@ ISR(TIMER2_COMP_vect) {
     if (command_parsed) {
       do {
         uart_putc(answer[i]);
-      } while (answer[++i] != PROTOCOL_STOPCHAR);
+      } while (answer[i++] != PROTOCOL_STOPCHAR);
       command_parsed = 0;
       counter = 0;
       TIMSK &= ~_BV(OCIE2);
@@ -61,7 +61,7 @@ ISR(TIMER2_COMP_vect) {
     }
     do {
       suart_putc(answer[i]);
-    } while (answer[++i] != PROTOCOL_STOPCHAR);
+    } while (answer[i++] != PROTOCOL_STOPCHAR);
     command_parsed = 0;
     counter = 0;
     TIMSK &= ~_BV(OCIE2);
