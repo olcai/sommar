@@ -46,17 +46,7 @@ void setupled(void) {
 ISR(TIMER2_COMP_vect) {
   static char counter = 0;
   int i = 0;
-  if (operation_mode == BASE) {
-    if (command_parsed) {
-      do {
-        uart_putc(answer[i]);
-      } while (answer[i++] != PROTOCOL_STOPCHAR);
-      command_parsed = 0;
-      counter = 0;
-      TIMSK &= ~_BV(OCIE2);
-    }
-  }
-  else if (counter++ == ANSWER_SEND_TIMER2_WAITS) {
+  if (counter++ == ANSWER_SEND_TIMER2_WAITS) {
     if (!command_parsed) {
       panic("No answer");
     }
@@ -83,6 +73,13 @@ void check_command(char* buffer) {
     TIMSK &= ~_BV(OCIE2);
   }
   if (operation_mode == BASE) {
+    if (command_parsed) {
+      unsigned char i = 0;
+      do {
+        uart_putc(answer[i]);
+      } while (answer[i++] != PROTOCOL_STOPCHAR);
+      command_parsed = 0;
+    }
     send_radio_command(buffer);
   }
 }
@@ -174,13 +171,12 @@ int main(void) {
   LCDstring(hello, 13);
   LCDGotoXY(0,1);
 
-    adc_dosample();
+  adc_dosample();
+  
   while(1)
   {
     if(uart.flags.stopchar_received) {
       uart.flags.stopchar_received = 0;
-      TCNT2 = 0;
-      TIMSK |= _BV(OCIE2);
       uint8_t i = 0;
       while ((buffer[i] = uart_getc()) != PROTOCOL_STOPCHAR) {
         buffer[i] = toupper(buffer[i]);
@@ -188,6 +184,7 @@ int main(void) {
       }
       check_command(buffer);
     }
+ 
     if(suart.flags.stopchar_received) {
       if (operation_mode == NODE) {
         suart.flags.stopchar_received = 0;
@@ -206,6 +203,7 @@ int main(void) {
         while ((c = suart_getc()) != PROTOCOL_STOPCHAR) {
           uart_putc(c);
         }
+        uart_putc(PROTOCOL_STOPCHAR);
       }
     }
     //TODO här skulle man kunna sleepa tills man får interrupt som säger att vi har data
