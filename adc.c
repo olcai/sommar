@@ -23,6 +23,6 @@ ISR(ADC_vect)
 {
   adc.flags.update_bit = ~adc.flags.update_bit;
 
-  ADCSRA |= _BV(ADSC);
+ // ADCSRA |= _BV(ADSC);
   PORTC = ADCH;
 }

@@ -1,6 +1,6 @@
 #ifndef __suart_h__
 #define __suart_h__
-
+#include <avr/eeprom.h>
 #include <stdint.h>
 #include "config.h"
 

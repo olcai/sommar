@@ -1,12 +1,15 @@
 #include <avr/interrupt.h>
+#include <avr/eeprom.h>
 #include <string.h>
 #include "bool.h"
 #include "config.h"
 #include "system.h"
 
+#define RTC_DATA_SIZE 6
+
 typedef struct
 {
-  char data[6]; /* the time in ASCII */
+  char data[RTC_DATA_SIZE]; /* the time in ASCII */
   struct
   {
     uint8_t update_bit: 1; /* inversed on RTC interrupt */
@@ -19,6 +22,9 @@ static volatile rtc_t rtc =
   { 0 }       /* flags */
 };
 
+/* storage in eeprom for RTC */
+uint8_t EEMEM rtc_eeprom[RTC_DATA_SIZE];
+
 void rtc_gettime(char* buffer)
 {
   uint8_t update_bit;
@@ -26,7 +32,7 @@ void rtc_gettime(char* buffer)
   do
   {
     update_bit = rtc.flags.update_bit;
-    memcpy(buffer, (char*)rtc.data, 6);
+    memcpy(buffer, (char*)rtc.data, RTC_DATA_SIZE);
 
     /* if update_bit is not the same then our RTC is now corrupted */
   } while(update_bit != rtc.flags.update_bit);
@@ -72,7 +78,7 @@ bool_t rtc_settime(char* buffer) {
     do
     {
       update_bit = rtc.flags.update_bit;
-      memcpy((char*)rtc.data, buffer, 6);
+      memcpy((char*)rtc.data, buffer, RTC_DATA_SIZE);
 
       /* if update_bit is not the same then our RTC is now corrupted */
     } while(update_bit != rtc.flags.update_bit);
@@ -91,4 +97,14 @@ void rtc_init(void) {
   OCR1AH = 14;
   OCR1AL = 16;
   TIMSK |= _BV(OCIE1A);
+
+  /* restore time form eeprom */
+  eeprom_read_block((void*)rtc.data, rtc_eeprom, RTC_DATA_SIZE);
+}
+
+void rtc_save(void)
+{
+  char foo[] = "abcdef";
+  //eeprom_write_block(rtc_eeprom, (void*)rtc.data, RTC_DATA_SIZE);
+  eeprom_write_block((void*)rtc.data, rtc_eeprom, RTC_DATA_SIZE);
 }

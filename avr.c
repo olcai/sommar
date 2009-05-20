@@ -7,6 +7,8 @@
 #include <util/delay.h>
 #include <string.h>
 #include <ctype.h>
+#include <avr/eeprom.h>
+#include <avr/wdt.h>
 
 #include "lcd_lib.h"
 #include "system.h"
@@ -87,7 +89,7 @@ void check_command(char* buffer) {
 void execute_command(char* buffer) {
   if (!strncmp("PING", buffer, 4)) {
     cmd_ok();
-     command_parsed= 1;
+    command_parsed= 1;
   }
   else if (!strncmp("TIME", buffer, 4)) {
     cmd_ok();
@@ -131,9 +133,14 @@ void timer2_init(void) {
 }
 
 int main(void) {
+
+
+
    /* set portC as output and all leds off */
   DDRC = 0xFF;
   PORTC = 0xff;
+
+
 
   operation_mode = BASE;
   char buffer[32];
@@ -144,10 +151,11 @@ int main(void) {
   rtc_init();
   adc_init();
 
+  /* configure the mode button pin as input */
+  MODE_BUTTON_DDR &= ~_BV(MODE_BUTTON_PIN);
   //Timer2 används för att hålla våran radio-timeslot.
   timer2_init();
  
-  sei();
 
 #if 0
   while(*p)
@@ -171,9 +179,23 @@ int main(void) {
   LCDstring(hello, 13);
   LCDGotoXY(0,1);
 
-  adc_dosample();
-  
-  while(1)
+  if(config_is_set(CONFIG_MODE_BASE))
+  {
+    LCDstring("base", 4);
+  }
+  else
+  {
+    LCDstring("node", 4);
+  }
+
+  sei();
+  //adc_dosample();
+  //uart_putc(a);
+
+  PORTC = 0xFF;
+
+  /* loop until the mode button pin is low */
+  while(bit_is_set(MODE_BUTTON_PORT, MODE_BUTTON_PIN))
   {
     if(uart.flags.stopchar_received) {
       uart.flags.stopchar_received = 0;
@@ -184,8 +206,8 @@ int main(void) {
       }
       check_command(buffer);
     }
- 
     if(suart.flags.stopchar_received) {
+      PORTC--;
       if (operation_mode == NODE) {
         suart.flags.stopchar_received = 0;
         TCNT2 = 0;
@@ -207,7 +229,14 @@ int main(void) {
       }
     }
     //TODO här skulle man kunna sleepa tills man får interrupt som säger att vi har data
-
   }
+
+  cli();
+  config_set(CONFIG ^ _BV(CONFIG_MODE_BASE));
+  rtc_save();
+
+  /* use the watchdog to get a nice cleab reset */
+  wdt_enable(WDTO_15MS);
+  while(1);
 }
 

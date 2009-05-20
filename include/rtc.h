@@ -6,5 +6,6 @@
 void rtc_gettime(char* buffer);
 bool_t rtc_settime(char* buffer);
 void rtc_init(void);
+void rtc_save(void);
 
 #endif
