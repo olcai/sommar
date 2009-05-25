@@ -4,10 +4,10 @@
 #include <avr/eeprom.h>
 #include <stdint.h>
 
-#define PROTOCOL_STOPCHAR '\r'
+#define PROTOCOL_STOPCHAR '\n'
 
 /* ska vara en 2-potens */
-#define UART_FIFO_SIZE 32
+#define UART_FIFO_SIZE 128
 
 #define SUART_RX_PORT PIND
 #define SUART_RX_DDR  DDRD
@@ -16,9 +16,24 @@
 #define SUART_TX_PORT PORTD
 #define SUART_TX_DDR  DDRD
 #define SUART_TX_PIN  4
-#define SUART_RADIO_PORT PORTD
-#define SUART_RADIO_DDR  DDRD
-#define SUART_RADIO_PIN  5
+
+/* configuration for radio */
+#define RADIO_PORT             PORTD
+#define RADIO_DDR              DDRD
+#define RADIO_PIN              6
+#define RADIO_STARTUP_MS_DELAY 5
+
+/*
+ * RADIO_POWERUP_COUNTER
+ * times of SUART_BIT_TIME_LENGTH to wait for radio to powerup, during this
+ * time the data line is high.
+ * This is essential numbers of bit lengths to wait before using the
+ * radio-tx module.
+ *
+ * Some empirical values:
+ * 10 - Corruption but start to end char is transmitted correctly.
+ */
+//#define RADIO_POWERUP_COUNTER 10
 
 #define MODE_BUTTON_PORT PIND
 #define MODE_BUTTON_DDR  DDRD
@@ -27,12 +42,32 @@
 //Gruppnummer (1-9)
 #define GROUP_NUMBER 4
 
+#include <stdint.h>
 
 #define CONFIG_MODE_BASE 1
+#define CONFIG_MODE_NODE 0
+#define CONFIG_GRP_LEN   2
 
-extern uint8_t EEMEM config;
-#define CONFIG (eeprom_read_byte(&config))
-#define config_is_set(flag) (CONFIG & _BV(flag))
-#define config_set(flags) (eeprom_write_byte(&config, flags))
+typedef struct
+{
+  uint16_t interval;
+  char group[CONFIG_GRP_LEN];
+  struct
+  {
+    uint8_t mode: 1;
+  } flags;
+} config_t;
+
+extern volatile config_t config;
+
+void config_load(void);
+void config_save(void);
+
+//#define CONFIG_MODE_BASE 1
+
+//extern uint8_t EEMEM config2;
+//#define CONFIG (eeprom_read_byte(&config2))
+//#define config_is_set(flag) (CONFIG & _BV(flag))
+//define config_set(flags) (eeprom_write_byte(&config2, flags))
 
 #endif

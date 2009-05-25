@@ -3,6 +3,7 @@
 #include <avr/eeprom.h>
 #include <stdint.h>
 #include "config.h"
+#include "bool.h"
 
 /* 
  * write_pos == read_pos => buffer is empty
@@ -22,16 +23,13 @@ typedef struct
     suart_fifo_t tx;
     uint8_t state;
     uint8_t bit_counter; /* bit counter used in timer */
-    struct
-    {
-        uint8_t stopchar_received: 1;
-    } flags;
+    uint8_t stopchars;
 } suart_t;
 
 extern volatile suart_t suart;
 
 void suart_init(void);
-void suart_putc(uint8_t byte);
+bool_t suart_putc(uint8_t byte);
 uint8_t suart_getc(void);
 
 #endif

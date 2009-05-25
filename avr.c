@@ -9,7 +9,9 @@
 #include <ctype.h>
 #include <avr/eeprom.h>
 #include <avr/wdt.h>
+#include <stdio.h>
 
+#include "cmd.h"
 #include "lcd_lib.h"
 #include "system.h"
 #include "config.h"
@@ -26,24 +28,15 @@
 #define ANSWER_SEND_TIMER2_WAITS (GROUP_NUMBER * 4)
 
 
-volatile uint8_t operation_mode;
+//volatile uint8_t operation_mode;
 volatile char answer[24] = {'0', '0' + GROUP_NUMBER};
+volatile char answer[24];
 volatile uint8_t command_parsed = 0;
 
 void check_command(char* buffer);
 void execute_command(char* buffer);
 void send_radio_command(char* buffer);
 signed char set_measure_time(char* buffer);
-
-void setupled(void) {
-  // Setup button input
-//  DDRC&=~_BV(0);//set PORTD pin0 to zero as input
-//  PORTC|=_BV(0);//Enable pull up
-  
-  // Setup LED output
-//  PORTB|=_BV(1);//led OFF
-//  DDRB|=_BV(1);//set PORTD pin1 to one as output
-}
 
 ISR(TIMER2_COMP_vect) {
   static char counter = 0;
@@ -53,7 +46,7 @@ ISR(TIMER2_COMP_vect) {
       panic("No answer");
     }
     do {
-      suart_putc(answer[i]);
+      uart_putc(answer[i]);
     } while (answer[i++] != PROTOCOL_STOPCHAR);
     command_parsed = 0;
     counter = 0;
@@ -67,61 +60,55 @@ void cmd_ok(void) {
     answer[4] = PROTOCOL_STOPCHAR;
 }
 
-void check_command(char* buffer) {
-  if (buffer[0] == '0' && (buffer[1] == '0' + GROUP_NUMBER || buffer[1] == '0')) {
-    execute_command(buffer + 2);
-  }
-  else {
-    TIMSK &= ~_BV(OCIE2);
-  }
-  if (operation_mode == BASE) {
-    if (command_parsed) {
-      unsigned char i = 0;
-      do {
-        uart_putc(answer[i]);
-      } while (answer[i++] != PROTOCOL_STOPCHAR);
-      command_parsed = 0;
-    }
-    send_radio_command(buffer);
-  }
+/* innehållet i dessa funktioner är hämtade ifrån execute_command() + aktivera timer */
+
+void cmd_PING(const uint8_t* arg)
+{
+  cmd_ok();
+  command_parsed= 1;
 }
 
-void execute_command(char* buffer) {
-  if (!strncmp("PING", buffer, 4)) {
-    cmd_ok();
-    command_parsed= 1;
+void cmd_VALUE(const uint8_t* arg)
+{
+  //Get current time
+  rtc_gettime((uint8_t*)answer+2);
+  
+  //Get adc value and convert to human readable
+  uint16_t value = adc.data[0];
+  //Do this to avoid division
+  value *= 4;
+  
+  //This is ugly, but avoids division, and is almost right.
+  if (value > 1000) {
+    value = 1000;
   }
-  else if (!strncmp("TIME", buffer, 4)) {
+
+  // Write the number to answer and remove the last digit to simulate division by ten
+  uint8_t lines = snprintf((char*)answer + 8, sizeof(answer) - 8, "_%02u", value);
+  answer[8 + lines] = answer[8 + lines - 1];
+  answer[8 + lines - 1] = '.';
+  answer[8 + lines + 1] = '%';
+  answer[8 + lines + 2] = PROTOCOL_STOPCHAR;
+
+  command_parsed = 1;
+}
+
+void cmd_TIME(const uint8_t* arg)
+{
+  if(rtc_settime(arg))
+  {
     cmd_ok();
-    if(rtc_settime(buffer + 4))
-      command_parsed = 1;
-  }
-  else if (!strncmp("INT", buffer, 3)) {
-    cmd_ok();
-    if (set_measure_time(buffer + 3))
-      command_parsed = 1;
-  }
-  else if (!strncmp("VALUE", buffer, 5)) {
-    //Answer NNHHMMSSvalue
-    rtc_gettime((char*)answer+2);
-    answer[8] = PROTOCOL_STOPCHAR;
     command_parsed = 1;
   }
-  else {
-    TIMSK &= ~_BV(OCIE2);
+}
+
+void cmd_INT(const uint8_t* arg)
+{
+  if(adc_set_interval(arg))
+  {
+    cmd_ok();
+    command_parsed = 1;
   }
-}
-
-void send_radio_command(char* buffer) {
-  unsigned char i = 0;
-  do {
-    suart_putc(buffer[i]);
-  } while (buffer[i++] != PROTOCOL_STOPCHAR);
-}
-
-signed char set_measure_time(char* buffer) {
-  //TODO fix and move to separate file
-  return 1;
 }
 
 void timer2_init(void) {
@@ -132,63 +119,174 @@ void timer2_init(void) {
   OCR2 = 180;
 }
 
-int main(void) {
-
-
-
-   /* set portC as output and all leds off */
-  DDRC = 0xFF;
-  PORTC = 0xff;
-
-
-
-  operation_mode = BASE;
-  char buffer[32];
-  const char str[] = "foo";
-  const char *p = str;
-  uart_init();
-  suart_init();
-  rtc_init();
-  adc_init();
-
-  /* configure the mode button pin as input */
-  MODE_BUTTON_DDR &= ~_BV(MODE_BUTTON_PIN);
-  //Timer2 används för att hålla våran radio-timeslot.
-  timer2_init();
- 
-
-#if 0
-  while(*p)
+void suart_puts(const char* str)
+{
+  while(*str)
   {
-#if 1
-      uart_putc(*p);
-      p++;
-#else
-      suart_putc(*p);
-      p++;
-#endif
+    while(suart_putc(*str) == FALSE);
+    str++;
   }
-#endif
+  while(suart_putc('\n') == FALSE);
+}
 
- /* Setup LCD and display greeting */
+void lcd_init(void)
+{
+  /* setup LCD on portB and display greeting */
   LCDinit(); 
   LCDclr();
   LCDGotoXY(0,0);
-  //LCDcursorOFF(); 
-  unsigned char hello[] = "System online";
-  LCDstring(hello, 13);
+  LCDcursorOFF(); 
+
+  LCDstring((uint8_t*)"System online", 13);
   LCDGotoXY(0,1);
-
-  if(config_is_set(CONFIG_MODE_BASE))
-  {
-    LCDstring("base", 4);
-  }
+  if(config.flags.mode == CONFIG_MODE_BASE)
+    LCDstring((uint8_t*)"base", 4);
   else
+    LCDstring((uint8_t*)"node", 4);
+}
+
+int main(void)
+{
+  const char* str;
+
+  /* initialize stuff commen for both base and node */
+  config_load();
+  lcd_init();
+  rtc_init();
+  adc_init();
+  uart_init();
+  
+  //Timer2 används för att hålla våran radio-timeslot (kanske bara behövs när vi är nod?.
+  timer2_init();
+
+#if 1
+  str = "\n00init\nSystem is now online!\n";
+  while(*str)
   {
-    LCDstring("node", 4);
+    while(suart_putc(*str) == FALSE);
+    str++;
+  }
+#endif
+
+  /* set portC as output and all leds off */
+  DDRC = 0xFF;
+  PORTC = 0xff;
+
+  /* lets initialize modules specific for the mode */
+  if(config.flags.mode == CONFIG_MODE_BASE); // TODO: temp always suart to
+    suart_init();
+
+  /* in our answer the two first byte is always the group number */
+  memcpy((void*)answer, (void*)config.group, CONFIG_GRP_LEN);
+
+  /* all is initialized, lets roll */
+  sei();
+  
+#if 0
+  /* alternate output between '00foo' and '00bar' forever */
+  while(1)
+  {
+    str = "00foo\n";
+    while(*str)
+    {
+      while(uart_putc(*str) == FALSE);
+      str++;
+    }
+    _delay_ms(1000);
+
+    str = "00bar\n";
+    while(*str)
+    {
+      while(uart_putc(*str) == FALSE);
+      str++;
+    }
+    _delay_ms(1000);
+  }
+#endif
+
+  /* configure the mode button pin as input */
+  MODE_BUTTON_DDR &= ~_BV(MODE_BUTTON_PIN);
+
+  /* loop until the mode button pin is low */
+  while(bit_is_set(MODE_BUTTON_PORT, MODE_BUTTON_PIN))
+  {
+    uint8_t buffer[UART_FIFO_SIZE];
+
+    /* uart data (radio), parse it */
+    if(uart.stopchars)
+    {
+      uart.stopchars--;
+
+      /* copy it to our stack */
+      uint8_t i = 0;
+      while ((buffer[i] = uart_getc()) != PROTOCOL_STOPCHAR)
+        i++;
+      /* 
+       * node -> parse it
+       * base -> pass along to the suart (to computer)
+       */
+      
+      if(config.flags.mode == CONFIG_MODE_BASE)
+      {
+        int j;
+        for(j=0;j<i;j++)
+          while(suart_putc(buffer[j]) == FALSE);
+      }
+      else {
+        if (cmd_parse(buffer, i)) {
+          // enable the send timer
+          TCNT2 = 0;
+          TIMSK |= _BV(OCIE2);
+        }
+      }
+    }
+
+    /*
+     * suart data (from computer)
+     * We only get this as base, so answer the command
+     * if it's addressed to us, and send to all nodes.
+     */
+    if(suart.stopchars) {
+      suart.stopchars--;
+      uint8_t i = 0;
+      while ((buffer[i] = suart_getc()) != PROTOCOL_STOPCHAR)
+        i++;
+      if (cmd_parse(buffer, i)) {
+        i = 0;
+        if (command_parsed == 1) {
+          do {
+            suart_putc(answer[i]);
+          } while (answer[i++] != PROTOCOL_STOPCHAR);
+          command_parsed = 0;
+        }
+      }
+      //Send to radio
+      i = 0;
+      do {
+        uart_putc(buffer[i]);
+      } while (buffer[i++] != PROTOCOL_STOPCHAR);
+    }
   }
 
-  sei();
+  /* we are closing down, do not disturb */
+  cli();
+
+  /* this is safe because we know that the mode is just one bit */
+  config.flags.mode = !config.flags.mode;
+  config_save();
+  rtc_save();
+
+  /* use the watchdog to get a nice clean reset */
+  wdt_enable(WDTO_15MS);
+  while(1);
+
+
+
+
+
+
+#if 0
+
   //adc_dosample();
   //uart_putc(a);
 
@@ -197,6 +295,7 @@ int main(void) {
   /* loop until the mode button pin is low */
   while(bit_is_set(MODE_BUTTON_PORT, MODE_BUTTON_PIN))
   {
+#if 0
     if(uart.flags.stopchar_received) {
       uart.flags.stopchar_received = 0;
       uint8_t i = 0;
@@ -206,18 +305,31 @@ int main(void) {
       }
       check_command(buffer);
     }
+#endif
+#if 1
     if(suart.flags.stopchar_received) {
-      PORTC--;
-      if (operation_mode == NODE) {
+      if (config.flags.mode == CONFIG_MODE_NODE) {
         suart.flags.stopchar_received = 0;
-        TCNT2 = 0;
-        TIMSK |= _BV(OCIE2);
+        while(1);
+//        TCNT2 = 0;
+//        TIMSK |= _BV(OCIE2);
         uint8_t i = 0;
+#if 0
+p="SUART[";
+while(*p)
+  uart_putc(*(p++));
         while ((buffer[i] = suart_getc()) != PROTOCOL_STOPCHAR) {
+uart_putc(buffer[i]);
           buffer[i] = toupper(buffer[i]);
           i++;
+
         }
-        check_command(buffer);
+p="]\n\r";
+while(*p)
+  uart_putc(*(p++));
+        PORTC--;
+#endif
+        //check_command(buffer);
       }
       else {
         suart.flags.stopchar_received = 0;
@@ -228,15 +340,20 @@ int main(void) {
         uart_putc(PROTOCOL_STOPCHAR);
       }
     }
+#endif
     //TODO här skulle man kunna sleepa tills man får interrupt som säger att vi har data
   }
 
   cli();
-  config_set(CONFIG ^ _BV(CONFIG_MODE_BASE));
   rtc_save();
+
+  /* this is safe because we know that mode is one bit */
+  config.flags.mode = !config.flags.mode;
+  config_save();
 
   /* use the watchdog to get a nice cleab reset */
   wdt_enable(WDTO_15MS);
   while(1);
+#endif
 }
 

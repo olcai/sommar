@@ -85,7 +85,7 @@ PROJECTNAME=myproject
 # (list all files to compile, e.g. 'a.c b.cpp as.S'):
 # Use .cc, .cpp or .C suffix for C++ files, use .S 
 # (NOT .s !!!) for assembly source code files.
-PRJSRC=avr.c include/lcd_lib.c system.c uart.c suart.c rtc.c adc.c config.c
+PRJSRC=avr.c include/lcd_lib.c system.c uart.c suart.c rtc.c adc.c config.c cmd.c
 
 # additional includes (e.g. -I/path/to/mydir)
 INC=-I/include -iquote include
@@ -141,6 +141,7 @@ CFLAGS=-I. $(INC) -DF_CPU=3686400 -g -mmcu=$(MCU) -O$(OPTLEVEL) \
 	-fpack-struct -fshort-enums             \
 	-funsigned-bitfields -funsigned-char    \
 	-Wall -Wstrict-prototypes               \
+	-DFLASH_TIME=\"$(shell date +%H%M%S)\"   \
 	-Wa,-ahlms=$(firstword                  \
 	$(filter %.lst, $(<:.c=.lst)))
 
@@ -211,6 +212,9 @@ GENASMFILES=$(filter %.s, $(OBJDEPS:.o=.s))
 
 
 .PHONY: writeflash clean stats gdbinit stats
+
+# always rebuild rtc.c for FLASHTIME
+.PHONY: rtc.c
 
 # Make targets:
 # all, disasm, stats, hex, writeflash/install, clean

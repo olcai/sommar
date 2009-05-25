@@ -4,12 +4,13 @@
 #include "bool.h"
 #include "config.h"
 #include "system.h"
+#include "adc.h"
 
 #define RTC_DATA_SIZE 6
 
 typedef struct
 {
-  char data[RTC_DATA_SIZE]; /* the time in ASCII */
+  uint8_t data[RTC_DATA_SIZE]; /* the time in ASCII */
   struct
   {
     uint8_t update_bit: 1; /* inversed on RTC interrupt */
@@ -18,14 +19,14 @@ typedef struct
 
 static volatile rtc_t rtc =
 {
-  { "000000" }, /* start time is 0 */
+  { }, /* start time is 0 */
   { 0 }       /* flags */
 };
 
 /* storage in eeprom for RTC */
-uint8_t EEMEM rtc_eeprom[RTC_DATA_SIZE];
+uint8_t EEMEM rtc_eeprom[RTC_DATA_SIZE] = FLASH_TIME;
 
-void rtc_gettime(char* buffer)
+void rtc_gettime(uint8_t*  buffer)
 {
   uint8_t update_bit;
 
@@ -44,6 +45,8 @@ ISR(TIMER1_COMPA_vect)
   TCNT1L = 0;
   rtc.flags.update_bit = ~rtc.flags.update_bit;
 
+  adc_rtc_tick();
+
   /* add the new second and handle the overflow */
   if (rtc.data[5]++ == '9') {
     rtc.data[5] = '0';
@@ -51,13 +54,15 @@ ISR(TIMER1_COMPA_vect)
       rtc.data[4] = '0';
       if (rtc.data[3]++ == '9') {
         rtc.data[3] = '0';
-        if (rtc.data[2]++ == '5') {
+        if (rtc.data[2]++ == '5')
+        {
           rtc.data[2] = '0';
-          if (rtc.data[1]++ == '9') {
+          if(rtc.data[0] == '2' && ++rtc.data[1] == '4')
+            memset(rtc.data, '0', sizeof(rtc.data));
+          else if (rtc.data[1] == '9'+1)
+          {
             rtc.data[1] = '0';
-            if (rtc.data[0]++ == '9') {
-              rtc.data[0] = '0';
-            }
+            rtc.data[0]++;
           }
         }
       }
@@ -65,7 +70,7 @@ ISR(TIMER1_COMPA_vect)
   }
 }
 
-bool_t rtc_settime(char* buffer) {
+bool_t rtc_settime(const uint8_t* buffer) {
   /* ensure that the indata is correct */
   if(buffer[0] >= '0' && buffer[0] <= '9'
      && buffer[1] >= '0' && buffer[1] <= '9'
@@ -104,7 +109,5 @@ void rtc_init(void) {
 
 void rtc_save(void)
 {
-  char foo[] = "abcdef";
-  //eeprom_write_block(rtc_eeprom, (void*)rtc.data, RTC_DATA_SIZE);
   eeprom_write_block((void*)rtc.data, rtc_eeprom, RTC_DATA_SIZE);
 }

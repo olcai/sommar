@@ -22,10 +22,6 @@ volatile suart_t suart;
 */
 #define SUART_BIT_TIME_LENGTH 48 /* (uint8_t) (F_CPU / (1200 * 64)) */
 
-
-#define RADIO_ON()  (SUART_RADIO_PORT |= _BV(SUART_RADIO_PIN))
-#define RADIO_OFF() (SUART_RADIO_PORT &= ~_BV(SUART_RADIO_PIN))
-
 void suart_init()
 {
   /* configure RX pin as input */
@@ -34,10 +30,6 @@ void suart_init()
   /* configure TX-pin as output and set high */
   SUART_TX_DDR |= _BV(SUART_TX_PIN);
   SUART_TX_PORT |= _BV(SUART_TX_PIN);
-
-  /* configure radio-on-pin as output and set low*/
-  SUART_RADIO_DDR |= _BV(SUART_RADIO_PIN);
-  RADIO_OFF();
 
   suart.state = STATE_IDLE;
 
@@ -54,18 +46,17 @@ void suart_init()
   TIMSK |= _BV(OCIE0);
 }
 
-void suart_putc(uint8_t byte)
+bool_t suart_putc(uint8_t byte)
 {
     /* is there any space in the buffer? */
     if((suart.tx.write_offset + 1) % UART_FIFO_SIZE == suart.tx.read_offset)
-    {
-        panic("suart: tx full");
-    }
+      return FALSE;
 
     suart.tx.data[suart.tx.write_offset] = byte;
     suart.tx.write_offset = (suart.tx.write_offset + 1) % UART_FIFO_SIZE;
 
     /* in timer we check for data to send if we are idle */
+    return TRUE;
 }
 
 uint8_t suart_getc(void)
@@ -143,8 +134,6 @@ ISR(TIMER0_COMP_vect)
       suart.state = STATE_IDLE;
       suart.tx.read_offset = (suart.tx.read_offset + 1) % UART_FIFO_SIZE;
 
-      RADIO_OFF();
-
       /* reset rx-interrupt flag and activate it */
       GIFR = _BV(INTF0);
       GICR |= _BV(INT0);
@@ -155,12 +144,13 @@ ISR(TIMER0_COMP_vect)
       if(bit_is_set(SUART_RX_PORT, SUART_RX_PIN))
       {
         if(suart.rx.data[suart.rx.write_offset] == PROTOCOL_STOPCHAR)
-          suart.flags.stopchar_received = 1;
+          suart.stopchars++;
         suart.rx.write_offset = (suart.rx.write_offset + 1) % UART_FIFO_SIZE;
         
-        /* buffer can not be empty, we have an overrun */
+        /* buffer can not be empty, we have an overrun so lets  
+         * throw away the oldest byte */
         if(suart.rx.write_offset == suart.rx.read_offset)
-          panic("suart: rx overflow");
+          suart.rx.read_offset = (suart.rx.read_offset + 1) % UART_FIFO_SIZE;
       }
       else
         panic("suart: rx bad stop");
@@ -180,8 +170,6 @@ ISR(TIMER0_COMP_vect)
         /* we got data to send so disable rx-interrupt */
         GICR &= ~_BV(INT0);
         suart.state = STATE_TRANSMIT;
-
-        RADIO_ON();
 
         /* put out the start bit */
         SUART_TX_PORT &= ~_BV(SUART_TX_PIN);
