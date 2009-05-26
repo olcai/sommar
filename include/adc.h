@@ -3,9 +3,11 @@
 
 #include <stdint.h>
 #include "bool.h"
+#include "rtc.h"
 
 typedef struct
 {
+  uint8_t data_time[1][RTC_DATA_SIZE];
   uint8_t data[1];
   struct
   {

@@ -8,13 +8,12 @@
 inline void radio_on(void)
 {
   /* if it is not already on, we activate it and wait for it to start */
-//  if(!bit_is_set(RADIO_PORT, RADIO_PIN))
+  if(!bit_is_set(RADIO_PORT, RADIO_PIN))
   {
     /* disable the rx-module */
     UCSRB &= ~_BV(RXEN);
     RADIO_PORT |= _BV(RADIO_PIN);
     _delay_ms(RADIO_STARTUP_MS_DELAY);
-
   }
 }
 

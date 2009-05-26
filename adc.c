@@ -2,6 +2,7 @@
 #include "bool.h"
 #include "system.h"
 #include "config.h"
+#include "rtc.h"
 #include <avr/interrupt.h>
 
 uint16_t sample_counter = 0;
@@ -9,6 +10,7 @@ uint16_t sample_counter = 0;
 
 volatile adc_t adc =
 {
+  { { '0' } },
   { 0 },
   { 0 }
 };
@@ -32,6 +34,7 @@ ISR(ADC_vect)
   
   //Läs in värdet till datavariabeln
   adc.data[0] = ADCH;
+
   PORTC = adc.data[0];
 }
 
@@ -40,8 +43,12 @@ void adc_rtc_tick(void) {
    * rtc körs varje sekund, så det blir direktmappning mellan sample_counter
    * och tidsintervallet (som också är i sekunder)
    */
-  if (sample_counter++ == config.interval) {
+  if (++sample_counter == config.interval) {
     sample_counter = 0;
+   
+    // nu gör vi det lätt för oss och sparar tiden vi hämtade värdet här
+    rtc_gettime((uint8_t*)adc.data_time[0]);
+
     adc_dosample();
   }
 }

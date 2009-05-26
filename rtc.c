@@ -6,8 +6,6 @@
 #include "system.h"
 #include "adc.h"
 
-#define RTC_DATA_SIZE 6
-
 typedef struct
 {
   uint8_t data[RTC_DATA_SIZE]; /* the time in ASCII */

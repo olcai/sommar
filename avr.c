@@ -10,6 +10,7 @@
 #include <avr/eeprom.h>
 #include <avr/wdt.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "cmd.h"
 #include "lcd_lib.h"
@@ -29,9 +30,10 @@
 
 
 //volatile uint8_t operation_mode;
-volatile char answer[24] = {'0', '0' + GROUP_NUMBER};
+//volatile char answer[24] = {'0', '0' + GROUP_NUMBER};
 volatile char answer[24];
 volatile uint8_t command_parsed = 0;
+static uint8_t response_wait_time;
 
 void check_command(char* buffer);
 void execute_command(char* buffer);
@@ -41,7 +43,7 @@ signed char set_measure_time(char* buffer);
 ISR(TIMER2_COMP_vect) {
   static char counter = 0;
   int i = 0;
-  if (counter++ == ANSWER_SEND_TIMER2_WAITS) {
+  if (counter++ == response_wait_time) {
     if (!command_parsed) {
       panic("No answer");
     }
@@ -70,8 +72,8 @@ void cmd_PING(const uint8_t* arg)
 
 void cmd_VALUE(const uint8_t* arg)
 {
-  //Get current time
-  rtc_gettime((uint8_t*)answer+2);
+  /* copy the time when the value was sampled */
+  memcpy(answer+2, adc.data_time[0], RTC_DATA_SIZE);
   
   //Get adc value and convert to human readable
   uint16_t value = adc.data[0];
@@ -159,22 +161,26 @@ int main(void)
   //Timer2 används för att hålla våran radio-timeslot (kanske bara behövs när vi är nod?.
   timer2_init();
 
-#if 1
-  str = "\n00init\nSystem is now online!\n";
-  while(*str)
-  {
-    while(suart_putc(*str) == FALSE);
-    str++;
-  }
-#endif
-
   /* set portC as output and all leds off */
   DDRC = 0xFF;
   PORTC = 0xff;
 
   /* lets initialize modules specific for the mode */
-  if(config.flags.mode == CONFIG_MODE_BASE); // TODO: temp always suart to
+  if(config.flags.mode == CONFIG_MODE_BASE)
+  {
     suart_init();
+    str = "\n00init\nSystem is now online!\n";
+    while(*str)
+    {
+      while(suart_putc(*str) == FALSE);
+      str++;
+    }
+  }
+  else
+  {
+    response_wait_time = atoi(config.group) * 4;
+//    response_wait_time = 16;
+  }
 
   /* in our answer the two first byte is always the group number */
   memcpy((void*)answer, (void*)config.group, CONFIG_GRP_LEN);
@@ -182,28 +188,6 @@ int main(void)
   /* all is initialized, lets roll */
   sei();
   
-#if 0
-  /* alternate output between '00foo' and '00bar' forever */
-  while(1)
-  {
-    str = "00foo\n";
-    while(*str)
-    {
-      while(uart_putc(*str) == FALSE);
-      str++;
-    }
-    _delay_ms(1000);
-
-    str = "00bar\n";
-    while(*str)
-    {
-      while(uart_putc(*str) == FALSE);
-      str++;
-    }
-    _delay_ms(1000);
-  }
-#endif
-
   /* configure the mode button pin as input */
   MODE_BUTTON_DDR &= ~_BV(MODE_BUTTON_PIN);
 
@@ -279,81 +263,4 @@ int main(void)
   /* use the watchdog to get a nice clean reset */
   wdt_enable(WDTO_15MS);
   while(1);
-
-
-
-
-
-
-#if 0
-
-  //adc_dosample();
-  //uart_putc(a);
-
-  PORTC = 0xFF;
-
-  /* loop until the mode button pin is low */
-  while(bit_is_set(MODE_BUTTON_PORT, MODE_BUTTON_PIN))
-  {
-#if 0
-    if(uart.flags.stopchar_received) {
-      uart.flags.stopchar_received = 0;
-      uint8_t i = 0;
-      while ((buffer[i] = uart_getc()) != PROTOCOL_STOPCHAR) {
-        buffer[i] = toupper(buffer[i]);
-        i++;
-      }
-      check_command(buffer);
-    }
-#endif
-#if 1
-    if(suart.flags.stopchar_received) {
-      if (config.flags.mode == CONFIG_MODE_NODE) {
-        suart.flags.stopchar_received = 0;
-        while(1);
-//        TCNT2 = 0;
-//        TIMSK |= _BV(OCIE2);
-        uint8_t i = 0;
-#if 0
-p="SUART[";
-while(*p)
-  uart_putc(*(p++));
-        while ((buffer[i] = suart_getc()) != PROTOCOL_STOPCHAR) {
-uart_putc(buffer[i]);
-          buffer[i] = toupper(buffer[i]);
-          i++;
-
-        }
-p="]\n\r";
-while(*p)
-  uart_putc(*(p++));
-        PORTC--;
-#endif
-        //check_command(buffer);
-      }
-      else {
-        suart.flags.stopchar_received = 0;
-        char c;
-        while ((c = suart_getc()) != PROTOCOL_STOPCHAR) {
-          uart_putc(c);
-        }
-        uart_putc(PROTOCOL_STOPCHAR);
-      }
-    }
-#endif
-    //TODO här skulle man kunna sleepa tills man får interrupt som säger att vi har data
-  }
-
-  cli();
-  rtc_save();
-
-  /* this is safe because we know that mode is one bit */
-  config.flags.mode = !config.flags.mode;
-  config_save();
-
-  /* use the watchdog to get a nice cleab reset */
-  wdt_enable(WDTO_15MS);
-  while(1);
-#endif
 }
-

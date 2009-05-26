@@ -6,7 +6,7 @@ volatile config_t config;
 config_t EEMEM config_eeprom =
 {
   1,                                    /* interval */
-  { '0', '4' },                         /* group */
+  "04",                                 /* group */
   { 
     CONFIG_MODE_BASE                    /* flags.mode */
   }

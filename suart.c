@@ -152,8 +152,11 @@ ISR(TIMER0_COMP_vect)
         if(suart.rx.write_offset == suart.rx.read_offset)
           suart.rx.read_offset = (suart.rx.read_offset + 1) % UART_FIFO_SIZE;
       }
+      /* the stop bit is bad so lets just throw the whole byte away */
+#if 0
       else
         panic("suart: rx bad stop");
+#endif
 
       /* reset rx-interrupt flag and activate it */
       GIFR = _BV(INTF0);
@@ -179,74 +182,6 @@ ISR(TIMER0_COMP_vect)
 
     default:
       panic("suart: invalid state");
-#if 0
-    case (STATE_TRANSMIT):
-    {
-      // Kolla om vi sänt alla bitar
-      if (tx_bit_count > 7)
-          {
-            state = STATE_TRANSMIT_STOP_BIT;
-            // Skriv en etta som stoppbit
-            SUART_TX_PORT |= _BV(SUART_TX_PIN);
-          }
-        /* Kolla om biten vi ska sända är en etta genom att köra
-           bitwise AND på tx_data som innehåller tecknet vi sänder.
-        */
-        else if (tx_data & 1)
-          // Skriv etta
-          SUART_TX_PORT |= _BV(SUART_TX_PIN);
-        else
-          // Skriv nolla
-          SUART_TX_PORT &= ~_BV(SUART_TX_PIN);
-        // Räkna upp
-        tx_bit_count++;
-        // Skifta tx_data ett steg
-        tx_data>>=1;
-        break;
-      }
-    case (STATE_TRANSMIT_STOP_BIT):
-      {
-        state = STATE_IDLE;
-        GIFR = _BV(INTF0);
-        GICR |= _BV(INT0); /* rx-interrupt, yes please */
-
-        // Avaktivera timerinterrupt
-        TIMSK &= ~_BV(1);
-        break;
-      }
-    case STATE_RECEIVE:
-      /* now we are in the middle of the bit */
-      OCR0 = SUART_BIT_TIME_LENGTH;
-        
-      /* sample the incoming bit */
-      if(bit_is_set(SUART_RX_PORT, SUART_RX_PIN))
-        rx_data |= _BV(rx_bit_count);
-      else
-        rx_data &= ~_BV(rx_bit_count);
-
-      if(++rx_bit_count > 7)
-        state = STATE_RECEIVE_STOP_BIT;
-      break;
-
-    case STATE_RECEIVE_STOP_BIT:
-      /* Check for good stop bit */
-      if(bit_is_set(SUART_RX_PORT, SUART_RX_PIN))
-        flag_new_data = 1;
-      /* Reset interrupts */
-      GIFR = _BV(INTF0);
-      GICR |= _BV(INT0);
-      TIMSK &= ~_BV(1); 
-      state = STATE_IDLE;
-      break;
-  // KERNEL PANIC
-  default:
-    PORTC=0;
-    while(1)
-      {
-        PORTC=~PORTC;
-        _delay_ms(500);
-      }
-#endif
   }
   
   /* reset timer0 counter */
